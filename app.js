@@ -10,6 +10,7 @@ class XMFReader {
 
     init() {
         this.setupEventListeners();
+        this.showMessage('Ready to upload XMF files!', 'success');
     }
 
     setupEventListeners() {
@@ -36,27 +37,66 @@ class XMFReader {
         });
     }
 
+    showMessage(message, type = 'error') {
+        const errorMsg = document.getElementById('errorMsg');
+        const successMsg = document.getElementById('successMsg');
+        
+        if (type === 'error') {
+            errorMsg.textContent = message;
+            errorMsg.classList.add('show');
+            successMsg.classList.remove('show');
+            setTimeout(() => errorMsg.classList.remove('show'), 5000);
+        } else {
+            successMsg.textContent = message;
+            successMsg.classList.add('show');
+            errorMsg.classList.remove('show');
+            setTimeout(() => successMsg.classList.remove('show'), 5000);
+        }
+    }
+
     handleFileSelect(fileList) {
+        if (fileList.length === 0) {
+            this.showMessage('No files selected', 'error');
+            return;
+        }
+
+        let validFiles = 0;
         for (let file of fileList) {
             if (file.name.endsWith('.xmf') || file.name.endsWith('.xml')) {
+                validFiles++;
                 const reader = new FileReader();
                 reader.onload = (e) => this.parseXMF(file.name, e.target.result);
+                reader.onerror = () => {
+                    this.showMessage(`Failed to read file: ${file.name}`, 'error');
+                };
                 reader.readAsText(file);
             }
+        }
+
+        if (validFiles === 0) {
+            this.showMessage('No valid XMF or XML files selected', 'error');
         }
     }
 
     parseXMF(fileName, xmlContent) {
         try {
+            console.log(`Parsing file: ${fileName}`);
             const parser = new DOMParser();
             const xmlDoc = parser.parseFromString(xmlContent, 'text/xml');
 
+            // Check for parsing errors
             if (xmlDoc.getElementsByTagName('parsererror').length > 0) {
-                alert('Error parsing XML file');
+                const errorNode = xmlDoc.getElementsByTagName('parsererror')[0];
+                this.showMessage(`XML Parse Error in ${fileName}: ${errorNode.textContent}`, 'error');
                 return;
             }
 
             const compounds = xmlDoc.getElementsByTagName('Compound');
+            if (compounds.length === 0) {
+                this.showMessage(`No compounds found in ${fileName}`, 'error');
+                return;
+            }
+
             const fileData = {
                 fileName: fileName,
                 compounds: []
@@ -70,13 +110,16 @@ class XMFReader {
 
             this.files.set(fileName, fileData);
             this.updateFilesList();
+            
             if (!this.currentFile) {
                 this.currentFile = fileName;
                 this.displayFileData(fileName);
             }
+
+            this.showMessage(`✓ Successfully loaded: ${fileName} (${fileData.compounds.length} compound(s))`, 'success');
         } catch (error) {
             console.error('Error parsing XMF:', error);
-            alert('Error reading file: ' + error.message);
+            this.showMessage(`Error reading ${fileName}: ${error.message}`, 'error');
         }
     }
 
@@ -204,6 +247,7 @@ class XMFReader {
         } else {
             this.displayEmpty();
         }
+        this.showMessage(`Removed: ${fileName}`, 'success');
     }
 
     displayFileData(fileName) {
