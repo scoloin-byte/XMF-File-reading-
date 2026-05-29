@@ -62,7 +62,7 @@ class XMFReader {
 
         let validFiles = 0;
         for (let file of fileList) {
-            if (file.name.endsWith('.xmf') || file.name.endsWith('.xml')) {
+            if (file.name.endsWith('.xmf') || file.name.endsWith('.xml') || file.name.endsWith('.vcmpd')) {
                 validFiles++;
                 const reader = new FileReader();
                 reader.onload = (e) => this.parseXMF(file.name, e.target.result);
@@ -74,7 +74,7 @@ class XMFReader {
         }
 
         if (validFiles === 0) {
-            this.showMessage('No valid XMF or XML files selected', 'error');
+            this.showMessage('No valid XMF, XML, or VCMPD files selected', 'error');
         }
     }
 
@@ -91,9 +91,12 @@ class XMFReader {
                 return;
             }
 
-            const compounds = xmlDoc.getElementsByTagName('Compound');
+            // Handle namespaces - get all Compound elements regardless of namespace
+            let compounds = xmlDoc.getElementsByTagName('Compound');
+            
             if (compounds.length === 0) {
                 this.showMessage(`No compounds found in ${fileName}`, 'error');
+                console.log('Available elements:', xmlDoc.documentElement.tagName);
                 return;
             }
 
@@ -129,6 +132,7 @@ class XMFReader {
             tyres: []
         };
 
+        // Use getElementsByTagName which works with namespaces
         const tyreModels = compoundElement.getElementsByTagName('TyreModel');
         for (let tyreModel of tyreModels) {
             const tyreData = this.parseTyreModel(tyreModel);
@@ -138,6 +142,16 @@ class XMFReader {
         const wearData = compoundElement.getElementsByTagName('Wear');
         if (wearData.length > 0) {
             data.wear = this.parseWear(wearData[0]);
+        }
+
+        const temperatureData = compoundElement.getElementsByTagName('Temperature');
+        if (temperatureData.length > 0) {
+            data.temperature = this.parseTemperature(temperatureData[0]);
+        }
+
+        const pressureData = compoundElement.getElementsByTagName('Pressure');
+        if (pressureData.length > 0) {
+            data.pressure = this.parsePressure(pressureData[0]);
         }
 
         return data;
@@ -213,6 +227,29 @@ class XMFReader {
         return data;
     }
 
+    parseTemperature(temperatureElement) {
+        const data = {
+            spinSkiddRate: parseFloat(temperatureElement.querySelector('SpinSkiddRate')?.getAttribute('value')) || 0,
+            workEnergyRate: parseFloat(temperatureElement.querySelector('WorkEnergyRate')?.getAttribute('value')) || 0,
+            rollEnergyRate: parseFloat(temperatureElement.querySelector('RollEnergyRate')?.getAttribute('value')) || 0,
+            heatGradient: parseFloat(temperatureElement.querySelector('HeatGradient')?.getAttribute('value')) || 0,
+            specificHeatCapacity: parseFloat(temperatureElement.querySelector('SpecificHeatCapacity')?.getAttribute('value')) || 0
+        };
+
+        return data;
+    }
+
+    parsePressure(pressureElement) {
+        const data = {
+            pressureMin: parseFloat(pressureElement.querySelector('PressureMin')?.getAttribute('value')) || 0,
+            pressureMax: parseFloat(pressureElement.querySelector('PressureMax')?.getAttribute('value')) || 0,
+            wearRateMin: parseFloat(pressureElement.querySelector('WearRateMin')?.getAttribute('value')) || 0,
+            wearRateMax: parseFloat(pressureElement.querySelector('WearRateMax')?.getAttribute('value')) || 0
+        };
+
+        return data;
+    }
+
     updateFilesList() {
         const filesList = document.getElementById('filesList');
         filesList.innerHTML = '';
@@ -270,6 +307,16 @@ class XMFReader {
         // Display wear data
         if (compound.wear) {
             html += this.renderWearData(compound.wear);
+        }
+
+        // Display temperature data
+        if (compound.temperature) {
+            html += this.renderTemperatureData(compound.temperature);
+        }
+
+        // Display pressure data
+        if (compound.pressure) {
+            html += this.renderPressureData(compound.pressure);
         }
 
         html += `</div>`;
@@ -384,6 +431,58 @@ class XMFReader {
                     <div class="data-item">
                         <label>Max Blistering Temp</label>
                         <value>${(wearData.maxBlisteringTemperature - 273.15).toFixed(0)}°C</value>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    renderTemperatureData(temperatureData) {
+        return `
+            <div class="data-section" style="margin-top: 20px;">
+                <h3 class="section-title">Temperature Simulation</h3>
+                <div class="data-grid">
+                    <div class="data-item">
+                        <label>Work Energy Rate</label>
+                        <value>${temperatureData.workEnergyRate.toFixed(2)}</value>
+                    </div>
+                    <div class="data-item">
+                        <label>Roll Energy Rate</label>
+                        <value>${temperatureData.rollEnergyRate.toFixed(3)}</value>
+                    </div>
+                    <div class="data-item">
+                        <label>Specific Heat Capacity</label>
+                        <value>${temperatureData.specificHeatCapacity.toFixed(0)}</value>
+                    </div>
+                    <div class="data-item">
+                        <label>Heat Gradient</label>
+                        <value>${temperatureData.heatGradient.toFixed(2)}</value>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    renderPressureData(pressureData) {
+        return `
+            <div class="data-section" style="margin-top: 20px;">
+                <h3 class="section-title">Pressure Range</h3>
+                <div class="data-grid">
+                    <div class="data-item">
+                        <label>Min Pressure</label>
+                        <value>${pressureData.pressureMin.toFixed(1)} PSI</value>
+                    </div>
+                    <div class="data-item">
+                        <label>Max Pressure</label>
+                        <value>${pressureData.pressureMax.toFixed(1)} PSI</value>
+                    </div>
+                    <div class="data-item">
+                        <label>Wear Rate Min</label>
+                        <value>${pressureData.wearRateMin.toFixed(5)}</value>
+                    </div>
+                    <div class="data-item">
+                        <label>Wear Rate Max</label>
+                        <value>${pressureData.wearRateMax.toFixed(5)}</value>
                     </div>
                 </div>
             </div>
